@@ -1,0 +1,31 @@
+#!/bin/bash
+trap : SIGTERM SIGINT
+
+# If using a virtualenv, set its path here
+VENV=~/env/celery
+
+# Module where the celery object is
+MODULE=lib.Worker.Models.uv_task
+
+# Run everything in the background,
+# but remember their process IDs.
+
+redis-server &
+REDIS_PID=$!
+
+rabbitmq-server &
+
+source $VENV/bin/activate
+celery multi start 2 -A $MODULE
+WORKR_PID=$!
+
+wait
+
+if [[ $? -gt 128 ]]
+then
+    echo "Shutting down..."
+    kill $REDIS_PID
+    kill $WORKR_PID
+    ps auxww | grep 'celery worker' | awk '{print $2}' | xargs kill
+    rabbitmqctl stop
+fi

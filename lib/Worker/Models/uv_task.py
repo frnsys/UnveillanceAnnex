@@ -1,10 +1,9 @@
 import os, requests
 from crontab import CronTab
 from json import dumps
-from time import sleep, time, mktime
+from time import time, mktime
 from datetime import date, timedelta
 from importlib import import_module
-from multiprocessing import Process
 from fabric.api import local, settings
 
 from Models.uv_object import UnveillanceObject
@@ -14,6 +13,11 @@ from lib.Core.Models.uv_task_channel import UnveillanceTaskChannel
 
 from vars import EmitSentinel, UV_DOC_TYPE, TASKS_ROOT, TASK_PERSIST_KEYS, ASSET_TAGS
 from conf import DEBUG, BASE_DIR, ANNEX_DIR, HOST, API_PORT, TASK_CHANNEL_PORT, MONITOR_ROOT
+
+import celery_conf
+from celery import Celery
+celery = Celery()
+celery.config_from_object(celery_conf)
 
 class UnveillanceTask(UnveillanceObject):
 	def __init__(self, inflate=None, _id=None):
@@ -228,18 +232,12 @@ class UnveillanceTask(UnveillanceObject):
 			module = import_module(p)
 			func = getattr(module, f)
 
-			#TODO: for cellery: 
-			# args = [(self,), ({'queue' :self.queue})]
-
 			args = [self]
 			if DEBUG: print args
-			
-			#p = Process(target=func.apply_async, args=args)
-			p = Process(target=func, args=args)
-			self.communicate()
-			sleep(1)
-			p.start()
 
+			# Send task to a celery worker
+			run_task.delay(func, args)
+			
 		except Exception as e:
 			printAsLog(e)
 			self.fail()
@@ -384,3 +382,8 @@ class UnveillanceTask(UnveillanceObject):
 		self.status = status
 		self.save()
 		self.communicate()
+
+
+@celery.task
+def run_task(func, args):
+    return func(*args)

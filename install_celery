@@ -1,0 +1,14 @@
+#!/bin/bash
+
+if [[ "$OSTYPE" =~ ^darwin ]]
+then
+    brew install rabbitmq
+    brew install redis
+
+# Otherwise, assume Linux...
+else
+    sudo apt-get install rabbitmq-server -y
+    sudo apt-get install redis-server -y
+fi
+
+pip install celery redis
